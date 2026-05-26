@@ -115,3 +115,15 @@ HF_MODEL_CANDIDATES="google/gemma-4-26B-A4B-it:deepinfra,google/gemma-4-26B-A4B-
 HF_BASE_URL="https://router.huggingface.co/v1"
 APP_DATA_DIR="data"
 ```
+
+
+## 2026-05 패치: 프로그램 자기지식 주입
+
+일부 모델이 "이 프로그램"이라는 표현을 제대로 해석하지 못해 TaskInstanceAgent가 `작업 수행 불가`를 반환하거나 Wiki/Memory/Final Answer가 빈 응답이 되는 문제가 있었다.
+
+해결:
+- `src/core/program_manifest.py` 추가
+- 모든 주요 Agent에 프로그램 기능 매뉴얼 주입
+- Supervisor 최종 답변 fallback 추가
+- Wiki/Memory/Evaluation/TrainingData Agent 빈 응답 fallback 추가
+- HF Router가 빈 응답을 반환하면 다음 후보 모델로 fallback

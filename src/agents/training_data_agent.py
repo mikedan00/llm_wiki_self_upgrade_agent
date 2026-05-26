@@ -7,7 +7,7 @@ class TrainingDataAgent(BaseAgent):
     name = "TrainingDataAgent"
 
     def run(self, task: str, source_text: str, final_answer: str, evaluation: str = "") -> AgentResult:
-        prompt = f'''
+        prompt = f"""
 다음 작업 기록을 SFT/LoRA 학습 데이터로 만들기 위한 instruction, input, output 구조로 요약하라.
 
 작업:
@@ -23,8 +23,15 @@ class TrainingDataAgent(BaseAgent):
 {evaluation}
 
 JSON 객체 하나만 출력하라.
-'''
-        raw = self.llm.chat(TRAINING_DATA_SYSTEM, prompt, temperature=0.1, max_tokens=1000)
+"""
+        try:
+            raw = self.llm.chat(TRAINING_DATA_SYSTEM, prompt, temperature=0.1, max_tokens=1200)
+        except Exception as e:
+            raw = f"TrainingDataAgent LLM 요약 실패: {str(e)}"
+
+        if not raw.strip():
+            raw = "작업 입력과 최종 답변을 SFT/LoRA 학습 데이터로 저장함."
+
         record = {
             "instruction": task,
             "input": source_text,
