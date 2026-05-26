@@ -89,3 +89,29 @@ python main.py --task "Gemma4 주식 분석 앱의 HF_TOKEN 오류 해결법을 
 ## 배포 주의
 
 Streamlit Cloud에서는 Gemma 모델을 직접 다운로드하지 않습니다. 이 프로젝트는 Hugging Face Router API 방식으로 호출합니다.
+
+
+
+## HF Router provider suffix 방식
+
+이 프로젝트는 다음 환경변수를 지원합니다.
+
+```env
+HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxx
+HF_MODEL_ID=google/gemma-4-26B-A4B-it
+HF_ROUTER_MODEL=google/gemma-4-26B-A4B-it:deepinfra
+HF_MODEL_CANDIDATES=google/gemma-4-26B-A4B-it:deepinfra,google/gemma-4-26B-A4B-it:novita,google/gemma-4-31B-it:deepinfra,google/gemma-4-31B-it:together,Qwen/Qwen3.5-9B:together,Qwen/Qwen2.5-7B-Instruct:together
+HF_BASE_URL=https://router.huggingface.co/v1
+APP_DATA_DIR=data
+```
+
+Streamlit Secrets에는 아래처럼 넣습니다.
+
+```toml
+HF_TOKEN="hf_xxxxxxxxxxxxxxxxxxxxxxxxx"
+HF_MODEL_ID="google/gemma-4-26B-A4B-it"
+HF_ROUTER_MODEL="google/gemma-4-26B-A4B-it:deepinfra"
+HF_MODEL_CANDIDATES="google/gemma-4-26B-A4B-it:deepinfra,google/gemma-4-26B-A4B-it:novita,google/gemma-4-31B-it:deepinfra,google/gemma-4-31B-it:together,Qwen/Qwen3.5-9B:together,Qwen/Qwen2.5-7B-Instruct:together"
+HF_BASE_URL="https://router.huggingface.co/v1"
+APP_DATA_DIR="data"
+```

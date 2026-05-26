@@ -14,12 +14,53 @@ st.set_page_config(
 st.title("🧠 LLM Wiki Self-Upgrade Agent")
 st.caption("Obsidian식 Markdown Wiki + Memory Agent + Task Instance Agents + Self-Upgrade Loop")
 
+DEFAULT_CANDIDATES = (
+    "google/gemma-4-26B-A4B-it:deepinfra,"
+    "google/gemma-4-26B-A4B-it:novita,"
+    "google/gemma-4-31B-it:deepinfra,"
+    "google/gemma-4-31B-it:together,"
+    "Qwen/Qwen3.5-9B:together,"
+    "Qwen/Qwen2.5-7B-Instruct:together"
+)
+
 with st.sidebar:
     st.header("LLM 설정")
-    hf_token_input = st.text_input("HF_TOKEN", type="password", value="")
-    model_id = st.text_input("Model ID", value=os.getenv("HF_MODEL_ID", "google/gemma-4-26B-A4B-it"))
-    base_url = st.text_input("HF Router Base URL", value=os.getenv("HF_BASE_URL", "https://router.huggingface.co/v1"))
-    data_dir = st.text_input("Data Directory", value=os.getenv("APP_DATA_DIR", "data"))
+
+    hf_token_input = st.text_input(
+        "HF_TOKEN",
+        type="password",
+        value="",
+        help="Streamlit Secrets에 HF_TOKEN을 넣었다면 비워두어도 됩니다.",
+    )
+
+    model_id = st.text_input(
+        "HF_MODEL_ID",
+        value=os.getenv("HF_MODEL_ID", "google/gemma-4-26B-A4B-it"),
+        help="provider suffix 없는 기본 모델 ID입니다.",
+    )
+
+    router_model = st.text_input(
+        "HF_ROUTER_MODEL",
+        value=os.getenv("HF_ROUTER_MODEL", "google/gemma-4-26B-A4B-it:deepinfra"),
+        help="가장 먼저 호출할 Hugging Face Router 모델입니다. 예: model:deepinfra",
+    )
+
+    candidates = st.text_area(
+        "HF_MODEL_CANDIDATES",
+        value=os.getenv("HF_MODEL_CANDIDATES", DEFAULT_CANDIDATES),
+        height=110,
+        help="쉼표로 구분된 fallback 모델 목록입니다.",
+    )
+
+    base_url = st.text_input(
+        "HF Router Base URL",
+        value=os.getenv("HF_BASE_URL", "https://router.huggingface.co/v1"),
+    )
+
+    data_dir = st.text_input(
+        "Data Directory",
+        value=os.getenv("APP_DATA_DIR", "data"),
+    )
 
     st.divider()
     st.markdown("### 실행 옵션")
@@ -35,6 +76,8 @@ with st.sidebar:
 settings = get_settings(
     hf_token_override=hf_token_input or None,
     model_id_override=model_id,
+    router_model_override=router_model,
+    candidates_override=candidates,
     base_url_override=base_url,
     data_dir_override=data_dir,
 )
@@ -43,10 +86,16 @@ tabs = st.tabs(["작업 실행", "Wiki", "Memory", "Runs", "Upgrades", "Training
 
 with tabs[0]:
     st.subheader("작업 실행")
+
+    with st.expander("현재 모델 라우터 설정", expanded=False):
+        st.write("우선 호출 모델:", settings.hf_router_model)
+        st.write("Fallback 후보:")
+        st.code("\n".join(settings.candidate_models))
+
     task = st.text_area(
         "Agent에게 시킬 작업",
         height=120,
-        placeholder="예: 최근 Streamlit HF_TOKEN 오류 해결 과정을 위키와 기억으로 정리하고, 다음 개선안을 만들어줘.",
+        placeholder="예: 배터리 오스모 속도를 줄이는 방법을 찾아 정리해줘",
     )
     source_text = st.text_area(
         "추가 원본 자료 / 오류 로그 / 코드 / 대화 내용",
@@ -58,25 +107,30 @@ with tabs[0]:
         if not task.strip():
             st.warning("작업 내용을 입력하세요.")
         else:
-            with st.spinner("에이전트들이 작업 중입니다..."):
-                supervisor = SupervisorAgent(
-                    settings,
-                    enabled={
-                        "wiki": run_wiki,
-                        "memory": run_memory,
-                        "evaluation": run_eval,
-                        "self_upgrade": run_upgrade,
-                        "training": run_training,
-                    },
-                )
-                result = supervisor.run(task=task, source_text=source_text)
+            try:
+                with st.spinner("에이전트들이 작업 중입니다..."):
+                    supervisor = SupervisorAgent(
+                        settings,
+                        enabled={
+                            "wiki": run_wiki,
+                            "memory": run_memory,
+                            "evaluation": run_eval,
+                            "self_upgrade": run_upgrade,
+                            "training": run_training,
+                        },
+                    )
+                    result = supervisor.run(task=task, source_text=source_text)
 
-            st.success(f"완료: {result.run_id}")
-            st.markdown("## 최종 응답")
-            st.write(result.final_answer)
+                st.success(f"완료: {result.run_id}")
+                st.markdown("## 최종 응답")
+                st.write(result.final_answer)
 
-            st.markdown("## 실행 요약")
-            st.json(result.model_dump())
+                st.markdown("## 실행 요약")
+                st.json(result.model_dump())
+
+            except Exception as e:
+                st.error("실행 중 오류가 발생했습니다.")
+                st.code(str(e))
 
 with tabs[1]:
     st.subheader("Wiki 문서")
@@ -140,15 +194,17 @@ Supervisor Agent
   └─ Training Data Agent: SFT/LoRA용 JSONL 축적
 ```
 
-이 구조의 self-upgrade는 다음 순서로 작동합니다.
+HF Router 호출 방식은 다음 순서입니다.
 
-1. 작업 수행
-2. 결과와 중간 산출물 저장
-3. 평가 Agent가 품질/누락/오류 위험을 평가
-4. Self-Upgrade Agent가 규칙, 프롬프트, 메모리 구조 개선안 생성
-5. Training Data Agent가 좋은 질의응답/작업흐름을 JSONL로 저장
-6. 사람이 검토 후 프롬프트/코드/LoRA 학습에 반영
+1. HF_ROUTER_MODEL 먼저 호출
+2. 실패하면 HF_MODEL_CANDIDATES를 왼쪽부터 순서대로 fallback
+3. 모든 후보가 실패하면 실패한 모델별 오류를 화면에 표시
 
-원격 Hugging Face Provider의 모델 가중치를 직접 수정하지는 않습니다. 대신 학습 가능한 데이터와 개선 루프를 축적합니다.
+예:
+
+```text
+HF_ROUTER_MODEL=google/gemma-4-26B-A4B-it:deepinfra
+HF_MODEL_CANDIDATES=google/gemma-4-26B-A4B-it:deepinfra,google/gemma-4-26B-A4B-it:novita,...
+```
 """
     )
